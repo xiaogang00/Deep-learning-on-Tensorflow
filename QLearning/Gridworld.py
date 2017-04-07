@@ -61,4 +61,108 @@ class gameEnv():
             hero.x +=1
         self.objects[0] = hero
     
+    def newPosition(self):
+        iterables = [range(self.sizeX), range(self.sizeY)]
+        points = []
+        for t in itertools.product(*iterables):
+            points.append(t)
+        currentPositions = []
+        for objectA in self.objects:
+            if (objectA.x, objectA.y) not in currentPositions:
+                currentPositions.append((objectA.x,object.y))
+        for pos in currentPositions:
+            points.remove(pos)
+        location = np.random.choice(range(len(points)), replace = False)
+        return points[location]
+
+    def CheckGoal(self):
+        others = []
+        for obj in self.objects:
+            if obj.name == 'hero':
+                hero = obj
+            else:
+                others.append(obj)
+        for other in others:
+            if hero.x == other.x and hero.y == other.y:
+                self.objects.remove(other)
+                if other.reward == 1:
+                    self.objects.append(gameob(self.newPosition(),1,1,1,1,'goal'))
+                else:
+                    self.objects.append(gameob(self.newPosition(),1,1,0,-1,'fire'))
+                return other.reward, False
+        return 0.0, False
+
+    def renderEnv(self):
+        a = np.ones([self.sizeY+2, self.sizeX+2, 3])
+        a[1:-1, 1:-1, :] = 0
+        hero = None
+        for item in self.objects:
+            a[item.y+1:item.y + item.size + 1, item.x+1:item.x+item.size +1, item.channel] = item.intensity
+        b = scipy.misc.imresize(a[:,:,0], [84,84,1], interp = 'nearest')
+        c = scipy.misc.imresize(a[:,:,1], [84,84,1], interp = 'nearest')
+        d = scipy.misc.imresize(a[:,:,2], [84,84,1], interp = 'nearest')
+        a = np.stack([b,c,d],axis = 2)
+        return a
+    
+    def step(self, action):
+        self.movechar(action)
+        reward, done = self.CheckGoal()
+        state = self.renderEnv()
+        return state, reward, done
+    
+    
+
+#定义之后的env环境
+env = gameEnv(size = 5)
+class Qnetwork():
+    def __init__(self, h_size):
+        self.scalarInput = tf.placeholder(shape = [None, 21168],
+                                          dtype = tf.float32)
+        self.imageIn = tf.reshape(self.scalarInput, shape = [-1,84,84,3])
+        self.conv1 = tf.contrib.layers.convolution2d(
+            inputs= self.imageIn, num_outputs = 32,
+            kernel_size = [8,8], stride=[4, 4],
+            padding = 'VALID', biases_initializer = None
+        )
+        self.conv2 = tf.contrib.layers.convolution2d(
+            inputs = self.conv1, num_outputs = 64,
+            kernel_size = [4,4], stride=[2, 2],
+            padding='VALID',biases_initializer = None
+        )
+        self.conv3 = tf.contrib.layers.convolution2d(
+            inputs = self.conv2, num_outputs = 64,
+            kernel_size = [3,3], stride=[1, 1],
+            padding='VALID',biases_initializer = None
+        )
+        self.conv4 = tf.contrib.layers.convolution2d(
+            inputs = self.conv3, num_outputs = 512,
+            kernel_size = [7,7], stride=[1, 1],
+            padding='VALID',biases_initializer = None
+        )
+        self.streamAC, self.streamVC = tf.split(self.conv4, 2, 3)
+        self.streamA = tf.contrib.layers.flatten(self.streamAC)
+        self.streamV = tf.contrib.layers.flatten(self.streamVC)
+        self.AW = tf.Variable(tf.random_normal([h_size //2, env.actions]))
+        self.VW = tf.Variable(tf.random_normal([h_size //2,1]))
+        self.Advantage = tf.matmul(self.streamA, self.Aw)
+        self.Value = tf.matmul(self.streamV, self.VW)
+        self.Qout = self.Value + tf.subtract(self.Advantage, tf.reduce_mean(
+            self.Advantage, reduction_indices = 1, keep_dims = True
+        ))
+        self.predict = tf.argmax(self.Qout, 1)
+
+        self.targetQ = tf.placeholder(shape = [None], dtype = tf.float32)
+        self.actions = tf.placeholder(shape = [None], dtype = tf.float32)
+        self.actions_onehot = tf.one_hot(self.actions,env.actions, dtype = tf.float32)
+        self.Q = tf.reduce_sum(tf.multiply(self.Qout, self.actions_onehot),reduction_indices = 1)
+        self.td_error = tf.square(self.targetQ - self.Q)
+        self.loss = tf.reduce_mean(self.td_error)
+        self.trainer = tf.train.AdamOptimizer(learning_rate=0.0001)
+        self.updateModel = self.trainer.minimize(self.loss)
+
+        
+
+
+
+
     
