@@ -160,6 +160,73 @@ class Qnetwork():
         self.trainer = tf.train.AdamOptimizer(learning_rate=0.0001)
         self.updateModel = self.trainer.minimize(self.loss)
 
+
+class experience_buffer():
+    def __init__(self, buffer_size = 50000):
+        self.buffer = []
+        self.buffer_size = buffer_size;
+    def add(self, experience):
+        if len(self.buffer) + len(experience) >= self.buffer_size:
+            self.buffer[0:(len(experience) + len(self.buffer))- self.buffer_size] = []
+        self.buffer.extend(experience)
+
+    def sample(self, size):
+        return np.reshape(np.array(random.sample(self.buffer, size)), [size, 5]) 
+    
+    def processState(states):
+        return np.shape(states, [21168])
+    
+    def updateTargetGraph(tfVars, tau):
+        total_vars = len(tfVars)
+        op_holder = []
+        for idx, var in enumerate(tfVars[0:total_vars // 2]):
+            op_holder.append(tfVars[0:total_vars//2].assign((var.value() * \
+            tau) + ((1-tau)*tfVars[idx + total_vars//2].value())))
+        return op_holder
+
+    def updateTarget(op_holder, sess):
+        for op in op_holder:
+            sess.run(op)
+    
+    batch_size = 32
+    update_freq = 4
+    y = 0.99
+    startE = 1
+    endE = 0.1
+    anneling_steps = 10000
+    num_episodes = 10000
+    pre_train_steps = 10000
+    max_epLength = 50
+    load_model = False
+    path = "./dqn"
+    h_size = 512
+    tau = 0.01
+
+    mainQN =Qnetwork(h_size)
+    targetQN = Qnetwork(h_size)
+    init = tf.global_variables_initializer()
+    trainables = tf.trainable_variables()
+    targetOps = updateTargetGraph(trainables, tau)
+
+    myBuffer = experience_buffer()
+    e =startE
+    stepDrop = (startE - endE)/ anneling_steps
+    rList = []
+    total_steps = 0
+    saver = tf.train.Saver()
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+    
+    
+
+
+
+
+
+
+
+
         
 
 
