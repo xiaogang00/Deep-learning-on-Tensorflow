@@ -51,3 +51,10 @@ def nn_layer(input_tensor, input_dim, output_dim, layer_name, act = tf.nn.relu):
         tf.summary.histogram('activations', activations)
         return activations
 
+hidden1 = nn_layer(x,784,500,'layer1')
+with tf.name_scope('dropout'):
+    keep_prob = tf.placeholder(tf.float32)
+    tf.summary.scalar('dropout_keep_probability', keep_prob)
+    dropped = tf.nn.dropout(hidden1, keep_prob)
+y = nn_layer(dropped, 500, 10, 'layer2', act=tf.identity)
+
