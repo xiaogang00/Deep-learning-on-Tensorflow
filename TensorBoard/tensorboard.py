@@ -58,3 +58,57 @@ with tf.name_scope('dropout'):
     dropped = tf.nn.dropout(hidden1, keep_prob)
 y = nn_layer(dropped, 500, 10, 'layer2', act=tf.identity)
 
+with tf.name_scope('cross_entropy'):
+    diff = tf.nn.softmax_cross_entropy_with_logits(logits = y, labels=y_)
+    with tf.name_scope('total'):
+        cross_entropy = tf.reduce_mean(diff)
+tf.summary.scalar('cross_entropy', cross_entropy)
+
+#Adma优化器
+with tf.name_scope('train'):
+    train_step = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy)
+with tf.name_scope('accuracy'):
+    with tf.name_scope('correct_prediction'):
+        correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(y_, 1))
+    with tf.name_scope('accuracy'):
+        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+tf.summary.scalar('accuracy', accuracy)
+
+
+#汇总操作
+merged = tf.summary.merge_all()
+train_writer = tf.summary.FileWriter(log_dir + '/train', sess.graph)
+test_writer = tf.summary.FileWriter(log_dir + '/test')
+tf.global_variables_initializer().run()
+
+def feed_dict(train):
+    if train:
+        xs, ys = mnist.train.next_batch(100)
+        k = dropout
+    else:
+        xs, ys = mnist.test.images, mnist.test.labels
+        k = 1.0
+    return {x: xs, y_:ys, keep_prob:k}
+
+saver = tf.train.Saver()
+for i in range(max_steps):
+    if i % 10 == 0:
+        summary, acc = sess.run([merged,accuracy], feed_dict = feed_dict(False))
+        test_writer.add_summary(summary, i)
+        print('Accuracy at step %s: %s' % (i, acc))
+    else:
+        if i% 100 == 99:
+            run_options = tf.RunOptions(trace_level = tf.RunOptions.FULL_TRACE)
+            rnn_metadata = tf.RunMetadata()
+            summary, _ = sess.run([merged, train_step], feed_dict=feed_dict(True),
+                                 options = run_options, run_metadata = run_metadata)
+            train_writer.add_run_metadata(run_metadata, 'step %03d' % i)
+            train_writer.add_summary(summary, i)
+            saver.save(sess, log_dir + "/model.ckpt", i)
+            print ('Adding run metadata for', i)
+        else:
+            summary, _ = sess.run([merged, train_step], feed_dict=feed_dict(True))
+            train_writer.add_summary(summary, i)
+train_writer.close()
+test_writer.close()
+    
